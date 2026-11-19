@@ -13,7 +13,7 @@ Sunrise and sunset are computed on your machine for where you are. If the comput
 
 - **Bar icon.** A sun. It turns to a rising or setting sun in the urgent color while a protocol is due, and dims once nothing is left today.
 - **Notification.** One per protocol, when it comes due. It says how long to stay out for the current cloud cover (about 10 minutes when clear, 20 when cloudy, 30 when overcast) and has a **Done** button. It stays on screen until you dismiss it, mark it done, or the window closes.
-- **Card.** Left click the icon for today's sunrise and sunset, each protocol's window and status, and a Done / Undo button. Right click the icon to mark whatever is due as done.
+- **Card.** Left click the icon for today's sunrise and sunset, each protocol's status, and a Done / Undo button. Click a protocol for its time window and how to do it. Right click the icon to mark whatever is due as done.
 
 ## Install
 

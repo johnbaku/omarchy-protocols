@@ -21,7 +21,20 @@ BarWidget {
 
   property bool popupOpen: false
   function close() { popupOpen = false }
-  onPopupOpenChanged: if (popupOpen && service) service.refreshSky()
+  onPopupOpenChanged: {
+    if (popupOpen && service) service.refreshSky()
+    if (!popupOpen) expanded = ({})
+  }
+
+  // Rows showing their detail (the window and how to do it), by protocol id.
+  // Kept here because the rows are rebuilt on every tick.
+  property var expanded: ({})
+  function toggleExpanded(id) {
+    var next = Object.assign({}, expanded)
+    if (next[id]) delete next[id]
+    else next[id] = true
+    expanded = next
+  }
 
   Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 
@@ -119,6 +132,7 @@ BarWidget {
           required property var modelData
           readonly property bool current: Protocols.isActive(modelData.status)
           readonly property bool over: modelData.status === "done" || modelData.status === "missed"
+          readonly property bool expanded: root.expanded[modelData.id] === true
           width: column.width
           implicitHeight: Math.max(details.implicitHeight, action.implicitHeight)
 
@@ -140,10 +154,22 @@ BarWidget {
             spacing: Style.space(2)
             opacity: row.over ? 0.6 : 1
 
-            Label {
+            Item {
               width: parent.width
-              text: strings.t(row.modelData.id + ".name")
-              font.bold: true
+              implicitHeight: name.implicitHeight
+
+              Label {
+                id: name
+                text: strings.t(row.modelData.id + ".name")
+                font.bold: true
+              }
+              Label {
+                anchors.left: name.right
+                anchors.leftMargin: Style.space(6)
+                anchors.verticalCenter: name.verticalCenter
+                opacity: 0.6
+                text: row.expanded ? Protocols.GLYPHS.less : Protocols.GLYPHS.more
+              }
             }
             Label {
               width: parent.width
@@ -152,17 +178,28 @@ BarWidget {
             }
             Label {
               width: parent.width
+              visible: row.expanded
               opacity: 0.7
               font.pixelSize: Style.font.bodySmall
               text: strings.t("window").arg(root.time(row.modelData.startMs)).arg(root.time(row.modelData.endMs))
             }
             Label {
               width: parent.width
-              visible: !row.over
+              visible: row.expanded
               opacity: 0.7
               font.pixelSize: Style.font.bodySmall
               text: strings.t(row.modelData.id + ".how")
             }
+          }
+
+          // Click the row, anywhere but its button, for the detail.
+          MouseArea {
+            anchors.left: parent.left
+            anchors.right: action.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.toggleExpanded(row.modelData.id)
           }
 
           Button {
