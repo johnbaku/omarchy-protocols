@@ -26,6 +26,12 @@ BarWidget {
     if (!popupOpen) expanded = ({})
   }
 
+  readonly property int doneCount: items.filter(function(item) { return item.status === "done" }).length
+  readonly property bool allDone: items.length > 0 && doneCount === items.length
+
+  // The protocol just checked off in the card, so its rebuilt row can confirm it.
+  property string justDone: ""
+
   // Rows showing their detail (the window and how to do it), by protocol id.
   // Kept here because the rows are rebuilt on every tick.
   property var expanded: ({})
@@ -54,7 +60,7 @@ BarWidget {
     ? strings.t("tooltip.active").arg(strings.t(activeItem.id + ".name"))
     : nextItem
       ? strings.t("tooltip.upcoming").arg(strings.t(nextItem.id + ".name")).arg(time(nextItem.startMs))
-      : strings.t("tooltip.finished")
+      : allDone ? strings.t("tooltip.allDone") : strings.t("tooltip.finished")
 
   readonly property string emptyText: !service || !service.stateLoaded ? strings.t("popup.starting")
     : !service.location ? strings.t("popup.noLocation")
@@ -65,9 +71,12 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.activeItem ? Protocols.GLYPHS[root.activeItem.anchor] : Protocols.GLYPHS.idle
+    // A check for the rest of the day once everything is done; dimmed only
+    // when the day ran out with something missed.
+    text: root.activeItem ? Protocols.GLYPHS[root.activeItem.anchor]
+      : root.allDone ? Protocols.GLYPHS.allDone : Protocols.GLYPHS.idle
     active: root.activeItem !== null
-    dimmed: root.activeItem === null && root.nextItem === null
+    dimmed: root.activeItem === null && root.nextItem === null && !root.allDone
     tooltipText: root.popupOpen ? "" : root.tooltip
     // Left click opens the card; right click marks what is due as done.
     onPressed: function(mouseButton) {
@@ -131,7 +140,8 @@ BarWidget {
           id: row
           required property var modelData
           readonly property bool current: Protocols.isActive(modelData.status)
-          readonly property bool over: modelData.status === "done" || modelData.status === "missed"
+          readonly property bool finished: modelData.status === "done"
+          readonly property bool missed: modelData.status === "missed"
           readonly property bool expanded: root.expanded[modelData.id] === true
           width: column.width
           implicitHeight: Math.max(details.implicitHeight, action.implicitHeight)
@@ -142,7 +152,7 @@ BarWidget {
             text: Protocols.GLYPHS[row.modelData.anchor]
             font.pixelSize: Style.font.iconLarge
             color: row.current ? Commons.Color.urgent : Commons.Color.popups.text
-            opacity: row.over ? 0.5 : 1
+            opacity: row.missed ? 0.5 : 1
           }
 
           Column {
@@ -152,7 +162,7 @@ BarWidget {
             anchors.right: action.left
             anchors.rightMargin: Style.space(10)
             spacing: Style.space(2)
-            opacity: row.over ? 0.6 : 1
+            opacity: row.missed ? 0.6 : 1
 
             Item {
               width: parent.width
@@ -174,7 +184,8 @@ BarWidget {
             Label {
               width: parent.width
               text: root.statusText(row.modelData)
-              color: row.current ? Commons.Color.urgent : Commons.Color.popups.text
+              color: row.current ? Commons.Color.urgent
+                : row.finished ? Commons.Color.accent : Commons.Color.popups.text
             }
             Label {
               width: parent.width
@@ -192,7 +203,7 @@ BarWidget {
             }
           }
 
-          // Click the row, anywhere but its button, for the detail.
+          // Click the row, anywhere but its check, for the detail.
           MouseArea {
             anchors.left: parent.left
             anchors.right: action.left
@@ -202,14 +213,43 @@ BarWidget {
             onClicked: root.toggleExpanded(row.modelData.id)
           }
 
-          Button {
+          // The check: an empty circle to tick off, a filled one once done.
+          // Clicking a filled one unticks it.
+          PanelActionButton {
             id: action
             anchors.right: parent.right
-            bordered: true
-            text: row.modelData.status === "done" ? strings.t("action.undo") : strings.t("action.done")
+            anchors.verticalCenter: details.top
+            anchors.verticalCenterOffset: name.implicitHeight
+            iconText: row.finished ? Protocols.GLYPHS.checked : Protocols.GLYPHS.unchecked
+            fontSize: Style.font.display
+            foreground: row.finished ? Commons.Color.accent : Commons.Color.popups.text
+            hoverColor: Commons.Color.accent
+            opacity: row.finished || row.current ? 1 : 0.6
+            tooltipText: row.finished ? strings.t("check.unmark") : strings.t("check.mark")
             onClicked: {
-              if (row.modelData.status === "done") root.service.markUndone(row.modelData.id)
-              else root.service.markDone(row.modelData.id)
+              if (row.finished) {
+                root.service.markUndone(row.modelData.id)
+              } else {
+                root.justDone = row.modelData.id
+                root.service.markDone(row.modelData.id)
+              }
+            }
+
+            // The tick lands: marking done rebuilds the row, so the new row
+            // plays it once.
+            NumberAnimation on scale {
+              id: land
+              running: false
+              from: 0.9
+              to: 1
+              duration: Style.duration(180)
+              easing.type: Easing.Bezier
+              easing.bezierCurve: Style.easeOut
+            }
+            Component.onCompleted: {
+              if (root.justDone !== row.modelData.id) return
+              root.justDone = ""
+              if (row.finished) land.start()
             }
           }
         }

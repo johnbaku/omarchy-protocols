@@ -17,11 +17,15 @@ var PROTOCOLS = [
 ]
 
 // Nerd Font glyphs: the rising sun, the setting sun, the plain one the bar
-// shows when nothing is due, and the chevrons that open and close a row.
+// shows when nothing is due and the check it shows once the day is done, a
+// row's check empty and ticked, and the chevrons that open and close a row.
 var GLYPHS = {
   sunrise: String.fromCodePoint(0xF059C),
   sunset: String.fromCodePoint(0xF059B),
   idle: String.fromCodePoint(0xF05A8),
+  allDone: String.fromCodePoint(0xF05E1),
+  unchecked: String.fromCodePoint(0xF0130),
+  checked: String.fromCodePoint(0xF05E0),
   more: String.fromCodePoint(0xF0140),
   less: String.fromCodePoint(0xF0143)
 }
