@@ -1,7 +1,8 @@
 {
   "title": "Protocols",
   "action.done": "Done",
-  "action.undo": "Undo",
+  "check.mark": "Mark as done",
+  "check.unmark": "Mark as not done",
 
   "morning-light.name": "Morning light",
   "morning-light.how": "Get outside and look toward the sun, never straight at it. No sunglasses, and not through a window.",
@@ -33,5 +34,6 @@
 
   "tooltip.active": "%1: go now",
   "tooltip.upcoming": "%1 at %2",
+  "tooltip.allDone": "All protocols done today",
   "tooltip.finished": "No more protocols today"
 }
