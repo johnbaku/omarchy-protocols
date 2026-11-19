@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "johnbaku.protocols",
+  "name": "Protocols",
+  "version": "0.1.0",
+  "author": "johnbaku",
+  "license": "MIT",
+  "description": "Reminds you of daily health protocols at the right moment, starting with morning and evening sunlight timed to your local sunrise and sunset.",
+  "kinds": ["service", "bar-widget"],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Protocols",
+    "description": "Today's protocols, when each is due, and a button to mark them done.",
+    "category": "Tools",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

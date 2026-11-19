@@ -1,0 +1,37 @@
+{
+  "title": "Protocols",
+  "action.done": "Done",
+  "action.undo": "Undo",
+
+  "morning-light.name": "Morning light",
+  "morning-light.how": "Get outside and look toward the sun, never straight at it. No sunglasses, and not through a window.",
+  "morning-light.notify": "The sun is up. Step outside and look toward it, best before %1.",
+  "morning-light.notifyLate": "Past the ideal window, but morning light still counts until %1. Step outside now.",
+
+  "evening-light.name": "Evening light",
+  "evening-light.how": "Catch the low sun before it sets. It steadies your body clock and softens the effect of bright light later tonight.",
+  "evening-light.notify": "The sun is low. Step outside and look toward it before it sets at %1.",
+  "evening-light.notifyLate": "The sun is low. Step outside and look toward it before it sets at %1.",
+
+  "sky.clear": "Clear sky: about %1 minutes outside is enough.",
+  "sky.cloudy": "Cloudy: stay out about %1 minutes.",
+  "sky.overcast": "Overcast: stay out about %1 minutes.",
+  "sky.unknown": "Stay out 5-10 minutes if it's clear, 15-20 if cloudy, 30 if overcast.",
+
+  "status.upcoming": "Starts at %1",
+  "status.due": "Go now, best before %1",
+  "status.late": "Still worth doing until %1",
+  "status.done": "Done at %1",
+  "status.missed": "Missed today",
+  "window": "%1 – %2",
+
+  "popup.sun": "%1 · Sunrise %2 · Sunset %3",
+  "popup.sunNoName": "Sunrise %1 · Sunset %2",
+  "popup.noLocation": "Location unknown. Connect to the network, or set a location in the weather panel.",
+  "popup.noSun": "The sun does not rise or set here today.",
+  "popup.starting": "Starting up.",
+
+  "tooltip.active": "%1: go now",
+  "tooltip.upcoming": "%1 at %2",
+  "tooltip.finished": "No more protocols today"
+}
