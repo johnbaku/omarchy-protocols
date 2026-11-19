@@ -16,12 +16,14 @@ var PROTOCOLS = [
   { id: "evening-light", anchor: "sunset", start: -45, ideal: 0, end: 0 }
 ]
 
-// Nerd Font glyphs: the rising sun, the setting sun, and the plain one the bar
-// shows when nothing is due.
+// Nerd Font glyphs: the rising sun, the setting sun, the plain one the bar
+// shows when nothing is due, and the chevrons that open and close a row.
 var GLYPHS = {
   sunrise: String.fromCodePoint(0xF059C),
   sunset: String.fromCodePoint(0xF059B),
-  idle: String.fromCodePoint(0xF05A8)
+  idle: String.fromCodePoint(0xF05A8),
+  more: String.fromCodePoint(0xF0140),
+  less: String.fromCodePoint(0xF0143)
 }
 
 // Refraction plus the sun's radius, the figure published sunrise tables use.
