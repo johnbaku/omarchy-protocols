@@ -30,13 +30,13 @@ test("sunrise and sunset match published tables", () => {
 test("polar day and night have no sunrise", () => {
   assert.strictEqual(P.sunTimes(78.22, 15.65, Date.parse("2026-06-21T11:00:00Z")).kind, "midnightSun")
   assert.strictEqual(P.sunTimes(78.22, 15.65, Date.parse("2026-12-21T11:00:00Z")).kind, "polarNight")
-  assert.deepStrictEqual(P.windows(78.22, 15.65, Date.parse("2026-12-21T11:00:00Z")), [])
+  assert.deepStrictEqual(P.windows(78.22, 15.65, Date.parse("2026-12-21T11:00:00Z")).map(p => p.id), ["morning-hydration"])
 })
 
 test("windows hang off sunrise and sunset", () => {
   const now = Date.parse("2026-11-19T18:00:00Z")
   const sun = P.sunTimes(48.4359, -123.35155, P.civilNoonMs(now))
-  const [morning, evening] = P.windows(48.4359, -123.35155, now)
+  const [morning, evening] = P.windows(48.4359, -123.35155, now).filter(p => p.needsSky)
   assert.strictEqual(morning.id, "morning-light")
   assert.strictEqual(morning.startMs, sun.riseMs + 30 * MINUTE)
   assert.strictEqual(morning.idealMs, sun.riseMs + 60 * MINUTE)
@@ -104,4 +104,63 @@ test("the day key is the computer's own calendar day", () => {
   const ms = new Date(2026, 0, 5, 23, 59).getTime()
   assert.strictEqual(P.dayKey(ms), "2026-01-05")
   assert.strictEqual(P.dayKey(ms + 2 * MINUTE), "2026-01-06")
+})
+
+
+test("hydration works without location and uses local morning hours, including DST transitions", () => {
+  for (const [month, day] of [[0, 5], [2, 8], [10, 1]]) {
+    const now = new Date(2026, month, day, 8).getTime()
+    const [water] = P.windows(null, null, now)
+    assert.strictEqual(water.id, "morning-hydration")
+    assert.strictEqual(water.needsSky, false)
+    assert.strictEqual(water.startMs, new Date(2026, month, day, 6).getTime())
+    assert.strictEqual(water.endMs, new Date(2026, month, day, 12).getTime())
+    assert.strictEqual(P.statusOf(water, water.startMs - 1), "upcoming")
+    assert.strictEqual(P.statusOf(water, water.startMs), "due")
+    assert.strictEqual(P.statusOf(water, water.endMs - 1), "due")
+    assert.strictEqual(P.statusOf(water, water.endMs), "missed")
+    assert.strictEqual(P.statusOf(water, water.endMs, now), "done")
+  }
+})
+
+test("hydration completion and notification marks survive restart and reset tomorrow", () => {
+  const raw = JSON.stringify({day: "2026-11-19", done: {"morning-hydration": 123}, notified: {"morning-hydration": true}})
+  const state = P.parseState(raw, "2026-11-19")
+  assert.strictEqual(state.done["morning-hydration"], 123)
+  assert.strictEqual(state.notified["morning-hydration"], true)
+  const tomorrow = P.parseState(raw, "2026-11-20")
+  assert.deepStrictEqual(tomorrow.done, {})
+  assert.deepStrictEqual(tomorrow.notified, {})
+})
+
+
+test("hydration is announced immediately without sky advice while light waits for weather", () => {
+  const service = fs.readFileSync(path.join(__dirname, "..", "Service.qml"), "utf8")
+  const announce = service.slice(service.indexOf("  function announce("), service.indexOf("  function markDone("))
+  const run = new Function("Protocols", `
+    var awaitingSky = ["morning-hydration", "morning-light"]
+    var onScreen = []
+    var sent = []
+    var dose = null
+    var notificationApp = "Protocols", ipcTarget = "johnbaku.protocols"
+    var strings = { t: function(key) { return { arg: function() { return key }, toString: function() { return key } } } }
+    var Quickshell = { execDetached: function(args) { sent.push(args) } }
+    function formatTime() { return "12:00" }
+    function itemsAt() { return [
+      { id: "morning-hydration", anchor: "morning", status: "due", needsSky: false },
+      { id: "morning-light", anchor: "sunrise", status: "due", needsSky: true }
+    ] }
+    ${announce}
+    announce(false)
+    var pending = awaitingSky.slice()
+    var immediate = sent.slice()
+    announce()
+    return {pending, immediate, sent, onScreen}
+  `)
+  const result = run(P)
+  assert.deepStrictEqual(result.pending, ["morning-light"])
+  assert.strictEqual(result.immediate.length, 1)
+  assert.strictEqual(result.immediate[0][8], "morning-hydration.notify")
+  assert.strictEqual(result.sent[1][8], "morning-light.notify\nsky.unknown")
+  assert.deepStrictEqual(result.onScreen, ["morning-hydration", "morning-light"])
 })
