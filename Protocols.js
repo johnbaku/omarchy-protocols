@@ -7,6 +7,9 @@ var DEG = Math.PI / 180
 var MINUTE = 60000
 var DAY = 86400000
 
+// How long the Snooze button on a reminder puts it off.
+var SNOOZE_MS = 5 * MINUTE
+
 // Each protocol's window, in minutes from its anchor (sunrise, sunset, or
 // local midnight for a morning reminder):
 // it becomes due at `start`, is at its best until `ideal`, and can no longer
@@ -179,11 +182,17 @@ function knownId(id) {
   return false
 }
 
+// Whether a protocol should be announced now: it never has been, or its
+// snooze has run out.
+function shouldAnnounce(notified, snoozedUntil, nowMs) {
+  return !notified || (!!snoozedUntil && nowMs >= snoozedUntil)
+}
+
 // The saved state for `day`: when each protocol was done, which have been
-// announced, and the last place the network was located. Another day's done
-// and announced marks are dropped; anything malformed is too.
+// announced, when each snoozed one comes back, and the last place the network
+// was located. Another day's marks are dropped; anything malformed is too.
 function parseState(raw, day) {
-  var state = { day: day, done: {}, notified: {}, location: null }
+  var state = { day: day, done: {}, notified: {}, snoozed: {}, location: null }
   try {
     var data = JSON.parse(String(raw || ""))
     if (!data || typeof data !== "object") return state
@@ -193,6 +202,8 @@ function parseState(raw, day) {
       var at = data.done ? data.done[p.id] : null
       if (typeof at === "number" && isFinite(at) && at > 0) state.done[p.id] = at
       if (data.notified && data.notified[p.id] === true) state.notified[p.id] = true
+      var until = data.snoozed ? data.snoozed[p.id] : null
+      if (typeof until === "number" && isFinite(until) && until > 0) state.snoozed[p.id] = until
     })
   } catch (e) {}
   return state
@@ -202,6 +213,7 @@ if (typeof module !== "undefined") {
   module.exports = {
     PROTOCOLS: PROTOCOLS,
     GLYPHS: GLYPHS,
+    SNOOZE_MS: SNOOZE_MS,
     solar: solar,
     solarNoonMs: solarNoonMs,
     sunTimes: sunTimes,
@@ -215,6 +227,7 @@ if (typeof module !== "undefined") {
     cleanLabel: cleanLabel,
     parseLocation: parseLocation,
     knownId: knownId,
+    shouldAnnounce: shouldAnnounce,
     parseState: parseState
   }
 }

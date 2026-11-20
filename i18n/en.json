@@ -1,6 +1,7 @@
 {
   "title": "Protocols",
   "action.done": "Done",
+  "action.snooze": "Snooze %1 min",
   "check.mark": "Mark as done",
   "check.unmark": "Mark as not done",
 

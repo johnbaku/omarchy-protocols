@@ -97,7 +97,7 @@ test("state keeps today's marks and drops everything else", () => {
   assert.deepStrictEqual(tomorrow.notified, {})
   assert.strictEqual(tomorrow.location.name, "Victoria")
 
-  assert.deepStrictEqual(P.parseState("garbage", "2026-11-20"), { day: "2026-11-20", done: {}, notified: {}, location: null })
+  assert.deepStrictEqual(P.parseState("garbage", "2026-11-20"), { day: "2026-11-20", done: {}, notified: {}, snoozed: {}, location: null })
 })
 
 test("the day key is the computer's own calendar day", () => {
@@ -145,6 +145,7 @@ test("hydration is announced immediately without sky advice while light waits fo
     var notificationApp = "Protocols", ipcTarget = "johnbaku.protocols"
     var strings = { t: function(key) { return { arg: function() { return key }, toString: function() { return key } } } }
     var Quickshell = { execDetached: function(args) { sent.push(args) } }
+    var I18n = { formatNumber: String }
     function formatTime() { return "12:00" }
     function itemsAt() { return [
       { id: "morning-hydration", anchor: "morning", status: "due", needsSky: false },
@@ -163,4 +164,18 @@ test("hydration is announced immediately without sky advice while light waits fo
   assert.strictEqual(result.immediate[0][8], "morning-hydration.notify")
   assert.strictEqual(result.sent[1][8], "morning-light.notify\nsky.unknown")
   assert.deepStrictEqual(result.onScreen, ["morning-hydration", "morning-light"])
+  assert.deepStrictEqual(result.sent[0].slice(-7), ["--action", "action.snooze", "omarchy-shell", "-q", "johnbaku.protocols", "snooze", "morning-hydration"])
+})
+
+test("a snoozed reminder comes back after five minutes", () => {
+  assert.strictEqual(P.SNOOZE_MS, 5 * MINUTE)
+  const until = 1000 + P.SNOOZE_MS
+  assert.ok(P.shouldAnnounce(undefined, undefined, 1000))
+  assert.ok(!P.shouldAnnounce(true, undefined, 1000))
+  assert.ok(!P.shouldAnnounce(true, until, until - 1))
+  assert.ok(P.shouldAnnounce(true, until, until))
+
+  const raw = JSON.stringify({ day: "2026-11-19", snoozed: { "morning-light": until, "evening-light": "soon", "unknown": 5 } })
+  assert.deepStrictEqual(P.parseState(raw, "2026-11-19").snoozed, { "morning-light": until })
+  assert.deepStrictEqual(P.parseState(raw, "2026-11-20").snoozed, {})
 })
