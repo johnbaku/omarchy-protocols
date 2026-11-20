@@ -49,7 +49,7 @@ Without a network the reminders still fire, using the last known location and th
 
 ```bash
 omarchy-shell johnbaku.protocols status               # today's windows as JSON
-omarchy-shell johnbaku.protocols progress             # history and consistency as JSON
+omarchy-shell johnbaku.protocols progress             # history and individual streaks as JSON
 omarchy-shell johnbaku.protocols done morning-light
 omarchy-shell johnbaku.protocols undo morning-light
 omarchy-shell johnbaku.protocols done morning-hydration
@@ -57,16 +57,16 @@ omarchy-shell johnbaku.protocols done morning-hydration
 
 Today's marks and daily history are kept locally in `~/.local/state/omarchy-protocols/state.json`. Nothing is uploaded.
 
-## Progress
+## Daily streaks
 
-Click the bar icon, then **Progress**. The calendar shades each recorded day by the fraction of protocols completed; click a day to see completion times and what was not marked done. Use the arrows to browse earlier months.
+The main card shows **1 of 3 done today** and a separate streak beneath each protocol's name. A missed evening-light session does not reset your hydration or morning-light streak.
 
-- **Tracking since** is the earliest saved day. Existing marks and notifications are migrated, but older days that were never saved cannot be recovered.
-- **Consistency** is completed protocols divided by available protocols across recorded days before today. Today is excluded while it is in progress; unrecorded days are excluded, too.
-- **Day streak** counts consecutive calendar days with every available protocol completed. An unfinished today leaves yesterday's streak intact. An unrecorded day breaks the streak.
-- **Completed** counts all saved completions, including today. Undo updates today's history immediately.
+- Checking off a protocol extends its streak; undo updates it immediately.
+- An unfinished protocol keeps yesterday's streak while its window is still open (or upcoming). Once the window closes without completion, that protocol's streak resets.
+- A missing or unavailable day breaks that protocol's streak: consecutive completion cannot be assumed.
+- No prior completions? The row says **Start your streak**.
 
-History keeps the protocols observed on each day, so adding a routine later does not change earlier scores. Days when the plugin was not running remain unrecorded rather than being labeled failures.
+Daily history remains stored locally across restarts. Existing marks are migrated, but older days that were never saved cannot be recovered. The `progress` command exposes the tracking start date, each current protocol's streak, and the saved history.
 
 ## Adding a protocol
 

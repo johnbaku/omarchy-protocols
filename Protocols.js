@@ -22,6 +22,7 @@ var PROTOCOLS = [
 // shows when nothing is due and the check it shows once the day is done, a
 // row's check empty and ticked, and the chevrons that open and close a row.
 var GLYPHS = {
+  streak: String.fromCodePoint(0xF0238),
   morning: String.fromCodePoint(0xF058C),
   sunrise: String.fromCodePoint(0xF059C),
   sunset: String.fromCodePoint(0xF059B),

@@ -46,43 +46,52 @@ test('records availability, completion and undo without mutating prior history',
   assert.equal(H.record(undone, '2026-11-20', [{id: water}], {}), undone)
 })
 
-test('consistency excludes today and gaps and uses historical availability', () => {
+test('each protocol has an independent streak', () => {
   const history = {
-    '2026-11-16': record([light], {[light]: 123}),
-    '2026-11-18': record([light, water], {[water]: 234}),
-    '2026-11-20': record(ids)
+    '2026-11-17': record(ids, {[water]: 1}),
+    '2026-11-18': record(ids, {[water]: 2, [light]: 2}),
+    '2026-11-19': record(ids, {[water]: 3, [light]: 3}),
+    '2026-11-20': record(ids, {[water]: 4})
   }
-  const summary = H.summary(history, '2026-11-20')
-  assert.equal(summary.started, '2026-11-16')
-  assert.equal(summary.consistency, 67)
-  assert.equal(summary.completed, 2)
-  assert.equal(summary.recorded, 2)
-  assert.equal(H.summary({'2026-11-20': record(ids)}, '2026-11-20').consistency, null)
+  assert.equal(H.streak(history, '2026-11-20', water, false), 4)
+  assert.equal(H.streak(history, '2026-11-20', light, false), 2)
+  assert.equal(H.streak(history, '2026-11-20', 'evening-light', false), 0)
+  assert.deepEqual(H.summary(history, '2026-11-20', [
+    {id: water, status: 'done'}, {id: light, status: 'missed'}
+  ]), {started: '2026-11-17', streaks: {[water]: 4, [light]: 0}})
 })
 
-test('streak tolerates an unfinished today but breaks on missed or unknown days', () => {
-  const full = record([water], {[water]: 1})
-  const history = {'2026-11-17': full, '2026-11-18': full, '2026-11-19': full, '2026-11-20': record([water])}
-  assert.equal(H.summary(history, '2026-11-20').streak, 3)
-  history['2026-11-20'] = full
-  assert.equal(H.summary(history, '2026-11-20').streak, 4)
-  delete history['2026-11-18']
-  assert.equal(H.summary(history, '2026-11-20').streak, 2)
-  history['2026-11-19'] = record([water])
-  assert.equal(H.summary(history, '2026-11-20').streak, 1)
+test('pending today preserves the streak; missing its window resets only that routine', () => {
+  const full = record(ids, {[water]: 1, [light]: 1})
+  const history = {'2026-11-18': full, '2026-11-19': full, '2026-11-20': record(ids)}
+  assert.equal(H.streak(history, '2026-11-20', water, false), 2)
+  assert.equal(H.streak(history, '2026-11-20', water, true), 0)
+  history['2026-11-20'].done[water] = 2
+  assert.equal(H.streak(history, '2026-11-20', water, true), 3)
+  assert.equal(H.streak(history, '2026-11-20', light, false), 2)
+  delete history['2026-11-20'].done[water]
+  assert.equal(H.streak(history, '2026-11-20', water, false), 2)
+  assert.equal(H.streak(history, '2026-11-20', water, true), 0)
 })
 
-test('calendar follows locale week starts, month boundaries, leap days and DST', () => {
-  const monday = H.monthDays('2026-11-01', {}, '2026-11-20', 1)
-  assert.equal(monday.length, 42)
-  assert.equal(monday[0].day, '2026-10-26')
-  assert.equal(monday[6].day, '2026-11-01')
-  assert.equal(monday.find(d => d.day === '2026-11-21').future, true)
-  const sunday = H.monthDays('2026-11-01', {}, '2026-11-20', 0)
-  assert.equal(sunday[0].day, '2026-11-01')
+test('missing, unavailable and incomplete past days break individual streaks', () => {
+  const full = record(ids, {[water]: 1})
+  const history = {'2026-11-17': full, '2026-11-19': full, '2026-11-20': full}
+  assert.equal(H.streak(history, '2026-11-20', water, false), 2)
+  history['2026-11-18'] = record([light], {[light]: 1})
+  assert.equal(H.streak(history, '2026-11-20', water, false), 2)
+  history['2026-11-19'] = record(ids)
+  assert.equal(H.streak(history, '2026-11-20', water, false), 1)
+  assert.equal(H.streak({}, '2026-11-20', water, false), 0)
+})
+
+test('streaks survive restart and follow calendar days over DST and year boundaries', () => {
+  for (const today of ['2026-03-09', '2026-11-02', '2026-01-01', '2024-03-01']) {
+    const history = {}
+    for (let offset = -3; offset <= 0; offset++) history[H.shiftDay(today, offset)] = record([water], {[water]: 123})
+    assert.equal(H.streak(H.restore(JSON.stringify({history}), today, ids), today, water, false), 4)
+  }
   assert.equal(H.shiftDay('2024-02-28', 1), '2024-02-29')
-  assert.equal(H.shiftDay('2026-03-08', 1), '2026-03-09')
-  assert.equal(H.shiftDay('2026-11-01', -1), '2026-10-31')
   assert.equal(H.shiftDay('2026-01-01', -1), '2025-12-31')
 })
 

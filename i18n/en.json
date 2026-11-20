@@ -45,21 +45,7 @@
   "morning-hydration.ended": "Morning reminder ended",
   "morning-hydration.window": "Reminder: %1 – %2",
 
-  "progress.title": "Progress",
-  "progress.today": "Today",
-  "progress.started": "Tracking since %1",
-  "progress.consistency": "Consistency",
-  "progress.streak": "Day streak",
-  "progress.completed": "Completed",
-  "progress.percent": "%1%",
-  "progress.basis": "Consistency covers recorded days before today. Streak counts consecutive days with every protocol done.",
-  "progress.firstDay": "Your history starts here. Consistency appears after your first recorded day ends.",
-  "progress.previous": "Previous month",
-  "progress.next": "Next month",
-  "progress.count": "%1 of %2 done",
-  "progress.noRecord": "Not recorded",
-  "progress.noRecordDetail": "No record for this day. Unrecorded days do not count as missed protocols.",
-  "progress.legend": "Brighter days mean more completed. Underlined days have records. Click a day for details.",
-  "progress.notYet": "Not done yet",
-  "progress.notDone": "Not marked done"
+  "streak.today": "%1 of %2 done today",
+  "streak.days": { "one": "%1-day streak", "other": "%1-day streak" },
+  "streak.start": "Start your streak"
 }

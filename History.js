@@ -74,45 +74,31 @@ function record(history, day, items, done) {
   return result
 }
 
-function counts(record) {
-  if (!record) return { done: 0, total: 0, complete: false }
-  var done = record.available.filter(function(id) { return !!record.done[id] }).length
-  return { done: done, total: record.available.length, complete: record.available.length > 0 && done === record.available.length }
-}
-
-function summary(history, today) {
-  var days = Object.keys(history).filter(function(key) { return key <= today }).sort()
-  var done = 0, total = 0, completed = 0, recorded = 0
-  days.forEach(function(key) {
-    var count = counts(history[key])
-    completed += count.done
-    if (key < today) { done += count.done; total += count.total; recorded++ }
-  })
-  // An unfinished today doesn't break yesterday's streak. An unrecorded day
-  // does: we cannot claim consecutive completion across a gap.
-  var cursor = counts(history[today]).complete ? today : shiftDay(today, -1)
-  var streak = 0
-  while (counts(history[cursor]).complete) { streak++; cursor = shiftDay(cursor, -1) }
-  return { started: days.length ? days[0] : today, consistency: total ? Math.round(100 * done / total) : null,
-    completed: completed, streak: streak, recorded: recorded }
-}
-
-function monthDays(month, history, today, firstDayOfWeek) {
-  var first = date(month)
-  first.setDate(1)
-  var offset = (first.getDay() - firstDayOfWeek + 7) % 7
-  var start = shiftDay(dayKey(first), -offset)
-  var result = []
-  for (var i = 0; i < 42; i++) {
-    var key = shiftDay(start, i)
-    var count = counts(history[key])
-    result.push({ day: key, number: date(key).getDate(), inMonth: key.slice(0, 7) === month.slice(0, 7),
-      future: key > today, tracked: !!history[key], done: count.done, total: count.total, complete: count.complete })
+// Each protocol has its own streak. Pending work keeps yesterday's streak;
+// a closed, unfinished window resets it. Gaps and unavailable days cannot
+// establish consecutive daily completion, so they end the count.
+function streak(history, today, id, missedToday) {
+  function completed(key) {
+    var entry = history[key]
+    return entry && entry.available.indexOf(id) !== -1 && !!entry.done[id]
   }
-  return result
+  if (!completed(today) && missedToday) return 0
+  var cursor = completed(today) ? today : shiftDay(today, -1)
+  var count = 0
+  while (completed(cursor)) { count++; cursor = shiftDay(cursor, -1) }
+  return count
+}
+
+function summary(history, today, items) {
+  var days = Object.keys(history).filter(function(key) { return key <= today }).sort()
+  var streaks = {}
+  items.forEach(function(item) {
+    streaks[item.id] = streak(history, today, item.id, item.status === "missed")
+  })
+  return { started: days.length ? days[0] : today, streaks: streaks }
 }
 
 if (typeof module !== "undefined") module.exports = {
   validDay: validDay, date: date, dayKey: dayKey, shiftDay: shiftDay, restore: restore,
-  record: record, counts: counts, summary: summary, monthDays: monthDays
+  record: record, streak: streak, summary: summary
 }

@@ -3,6 +3,7 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "Protocols.js" as Protocols
+import "History.js" as History
 
 // The bar icon and its card. All the timing lives in Service.qml.
 BarWidget {
@@ -20,12 +21,10 @@ BarWidget {
   readonly property string placeName: service && service.location ? service.location.name : ""
 
   property bool popupOpen: false
-  property bool showProgress: false
-  onShowProgressChanged: scroll.contentY = 0
   function close() { popupOpen = false }
   onPopupOpenChanged: {
     if (popupOpen && service) service.refreshSky()
-    if (!popupOpen) { expanded = ({}); showProgress = false }
+    if (!popupOpen) { expanded = ({}); scroll.contentY = 0 }
   }
 
   readonly property int doneCount: items.filter(function(item) { return item.status === "done" }).length
@@ -145,32 +144,16 @@ BarWidget {
           }
         }
 
-        Row {
+        Label {
           width: parent.width
-          spacing: Style.space(6)
-          Button {
-            text: strings.t("progress.today")
-            selected: !root.showProgress
-            focusable: true
-            onClicked: root.showProgress = false
-          }
-          Button {
-            text: strings.t("progress.title")
-            selected: root.showProgress
-            focusable: true
-            onClicked: root.showProgress = true
-          }
-        }
-
-        Loader {
-          width: parent.width
-          active: root.showProgress && root.service !== null && root.service.stateLoaded
-          visible: active
-          sourceComponent: Component { ProgressView { service: root.service } }
+          visible: root.items.length > 0
+          text: strings.t("streak.today").arg(Commons.I18n.formatNumber(root.doneCount)).arg(Commons.I18n.formatNumber(root.items.length))
+          color: Commons.Color.accent
+          font.bold: true
         }
 
         Repeater {
-          model: root.showProgress ? [] : root.items
+          model: root.items
 
           Item {
             id: row
@@ -178,6 +161,7 @@ BarWidget {
             readonly property bool current: Protocols.isActive(modelData.status)
             readonly property bool finished: modelData.status === "done"
             readonly property bool missed: modelData.status === "missed"
+            readonly property int streak: root.service ? History.streak(root.service.history, root.service.day, modelData.id, missed) : 0
             readonly property bool expanded: root.expanded[modelData.id] === true
             width: column.width
             implicitHeight: Math.max(details.implicitHeight, action.implicitHeight)
@@ -216,6 +200,15 @@ BarWidget {
                   opacity: 0.6
                   text: row.expanded ? Protocols.GLYPHS.less : Protocols.GLYPHS.more
                 }
+              }
+              Label {
+                width: parent.width
+                font.pixelSize: Style.font.bodySmall
+                text: row.streak > 0
+                  ? Protocols.GLYPHS.streak + " " + strings.tn("streak.days", row.streak).arg(Commons.I18n.formatNumber(row.streak))
+                  : strings.t("streak.start")
+                color: row.streak > 0 ? Commons.Color.accent : Commons.Color.popups.text
+                opacity: row.streak > 0 ? 1 : 0.6
               }
               Label {
                 width: parent.width
@@ -293,7 +286,7 @@ BarWidget {
 
         Label {
           width: parent.width
-          visible: !root.showProgress && root.items.some(function(item) { return item.needsSky })
+          visible: root.items.some(function(item) { return item.needsSky })
           opacity: 0.7
           font.pixelSize: Style.font.bodySmall
           text: root.dose

@@ -282,7 +282,7 @@ Item {
     function done(id: string): void { root.markDone(id) }
     function undo(id: string): void { root.markUndone(id) }
     function progress(): string {
-      return JSON.stringify({ summary: History.summary(root.history, root.day), history: root.history })
+      return JSON.stringify({ summary: History.summary(root.history, root.day, root.items), history: root.history })
     }
     function status(): string {
       return JSON.stringify({ location: root.location, sun: root.sun, items: root.items, dose: root.dose })
