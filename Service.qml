@@ -36,6 +36,8 @@ Item {
   property string day: ""
   property var done: ({})
   property var notified: ({})
+  // When each snoozed reminder comes back.
+  property var snoozed: ({})
 
   // ---- Cloud cover, fetched when a protocol comes due or the card opens.
   property var cloudCover: null
@@ -75,7 +77,7 @@ Item {
   }
 
   function save() {
-    stateFile.setText(JSON.stringify({ day: day, done: done, notified: notified, location: detectedLocation }, null, 2) + "\n")
+    stateFile.setText(JSON.stringify({ day: day, done: done, notified: notified, snoozed: snoozed, location: detectedLocation }, null, 2) + "\n")
   }
 
   function applyState(raw) {
@@ -83,6 +85,7 @@ Item {
     day = state.day
     done = state.done
     notified = state.notified
+    snoozed = state.snoozed
     if (!detectedLocation) detectedLocation = state.location
     stateLoaded = true
     detectLocation()
@@ -100,6 +103,7 @@ Item {
       day = today
       done = ({})
       notified = ({})
+      snoozed = ({})
       save()
     }
     if (resumed) detectLocation()
@@ -110,7 +114,7 @@ Item {
     current.forEach(function(item) {
       if (!Protocols.isActive(item.status)) return
       active[item.id] = true
-      if (!notified[item.id]) due.push(item.id)
+      if (Protocols.shouldAnnounce(notified[item.id], snoozed[item.id], now)) due.push(item.id)
     })
 
     // Take down the reminder for anything done or no longer possible.
@@ -122,8 +126,13 @@ Item {
 
     if (due.length === 0) return
     var marks = Object.assign({}, notified)
-    due.forEach(function(id) { marks[id] = true })
+    var snoozes = Object.assign({}, snoozed)
+    due.forEach(function(id) {
+      marks[id] = true
+      delete snoozes[id]
+    })
     notified = marks
+    snoozed = snoozes
     save()
     awaitingSky = awaitingSky.concat(due)
     // Clock reminders should never wait for a weather request.
@@ -152,7 +161,9 @@ Item {
       Quickshell.execDetached([
         "omarchy-notification-send", "--app-name", notificationApp, "-g", Protocols.GLYPHS[item.anchor],
         "-u", "critical", strings.t(item.id + ".name"), body + (item.needsSky ? "\n" + sky : ""),
-        "--action", strings.t("action.done"), "omarchy-shell", "-q", ipcTarget, "done", item.id
+        "--action", strings.t("action.done"), "omarchy-shell", "-q", ipcTarget, "done", item.id,
+        "--action", strings.t("action.snooze").arg(I18n.formatNumber(Protocols.SNOOZE_MS / 60000)),
+        "omarchy-shell", "-q", ipcTarget, "snooze", item.id
       ])
       if (onScreen.indexOf(item.id) === -1) onScreen = onScreen.concat([item.id])
     })
@@ -165,6 +176,20 @@ Item {
     done = marks
     save()
     tick()
+  }
+
+  // Take the reminder down and bring it back in five minutes, if its window
+  // is still open then.
+  function snooze(id) {
+    if (!stateLoaded || !Protocols.knownId(id) || done[id]) return
+    var marks = Object.assign({}, snoozed)
+    marks[id] = Date.now() + Protocols.SNOOZE_MS
+    snoozed = marks
+    save()
+    awaitingSky = awaitingSky.filter(function(waiting) { return waiting !== id })
+    onScreen = onScreen.filter(function(shown) { return shown !== id })
+    Quickshell.execDetached(["omarchy-notification-dismiss", strings.t(id + ".name")])
+    snoozeTimer.restart()
   }
 
   function markUndone(id) {
@@ -201,6 +226,14 @@ Item {
     interval: 30000
     repeat: true
     running: true
+    onTriggered: root.tick()
+  }
+
+  // Brings a snoozed reminder back on time rather than at the next tick. A
+  // second snooze restarts it; the earlier reminder then waits for a tick.
+  Timer {
+    id: snoozeTimer
+    interval: Protocols.SNOOZE_MS
     onTriggered: root.tick()
   }
 
@@ -272,6 +305,7 @@ Item {
 
     function done(id: string): void { root.markDone(id) }
     function undo(id: string): void { root.markUndone(id) }
+    function snooze(id: string): void { root.snooze(id) }
     function status(): string {
       return JSON.stringify({ location: root.location, sun: root.sun, items: root.items, dose: root.dose })
     }
