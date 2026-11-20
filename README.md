@@ -49,12 +49,24 @@ Without a network the reminders still fire, using the last known location and th
 
 ```bash
 omarchy-shell johnbaku.protocols status               # today's windows as JSON
+omarchy-shell johnbaku.protocols progress             # history and consistency as JSON
 omarchy-shell johnbaku.protocols done morning-light
 omarchy-shell johnbaku.protocols undo morning-light
 omarchy-shell johnbaku.protocols done morning-hydration
 ```
 
-Today's marks are kept in `~/.local/state/omarchy-protocols/state.json`.
+Today's marks and daily history are kept locally in `~/.local/state/omarchy-protocols/state.json`. Nothing is uploaded.
+
+## Progress
+
+Click the bar icon, then **Progress**. The calendar shades each recorded day by the fraction of protocols completed; click a day to see completion times and what was not marked done. Use the arrows to browse earlier months.
+
+- **Tracking since** is the earliest saved day. Existing marks and notifications are migrated, but older days that were never saved cannot be recovered.
+- **Consistency** is completed protocols divided by available protocols across recorded days before today. Today is excluded while it is in progress; unrecorded days are excluded, too.
+- **Day streak** counts consecutive calendar days with every available protocol completed. An unfinished today leaves yesterday's streak intact. An unrecorded day breaks the streak.
+- **Completed** counts all saved completions, including today. Undo updates today's history immediately.
+
+History keeps the protocols observed on each day, so adding a routine later does not change earlier scores. Days when the plugin was not running remain unrecorded rather than being labeled failures.
 
 ## Adding a protocol
 

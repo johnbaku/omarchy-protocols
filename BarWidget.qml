@@ -20,10 +20,12 @@ BarWidget {
   readonly property string placeName: service && service.location ? service.location.name : ""
 
   property bool popupOpen: false
+  property bool showProgress: false
+  onShowProgressChanged: scroll.contentY = 0
   function close() { popupOpen = false }
   onPopupOpenChanged: {
     if (popupOpen && service) service.refreshSky()
-    if (!popupOpen) expanded = ({})
+    if (!popupOpen) { expanded = ({}); showProgress = false }
   }
 
   readonly property int doneCount: items.filter(function(item) { return item.status === "done" }).length
@@ -107,164 +109,197 @@ BarWidget {
     contentWidth: popup.fittedContentWidth(Style.space(340))
     contentHeight: popup.fittedContentHeight(column.implicitHeight)
 
-    Column {
-      id: column
-      width: parent.width
-      spacing: Style.space(12)
+    Flickable {
+      id: scroll
+      anchors.fill: parent
+      contentHeight: column.implicitHeight
+      clip: true
+      boundsBehavior: Flickable.StopAtBounds
+      flickableDirection: Flickable.VerticalFlick
 
       Column {
+        id: column
         width: parent.width
-        spacing: Style.space(2)
+        spacing: Style.space(12)
 
-        Label {
+        Column {
           width: parent.width
-          text: strings.t("title")
-          font.pixelSize: Style.font.subtitle
-          font.bold: true
-        }
-        Label {
-          width: parent.width
-          visible: text !== ""
-          opacity: 0.7
-          font.pixelSize: Style.font.bodySmall
-          text: root.emptyText !== "" ? root.emptyText
-            : !root.sun || root.sun.kind !== "normal" ? ""
-            : root.placeName !== ""
-              ? strings.t("popup.sun").arg(root.placeName).arg(root.time(root.sun.riseMs)).arg(root.time(root.sun.setMs))
-              : strings.t("popup.sunNoName").arg(root.time(root.sun.riseMs)).arg(root.time(root.sun.setMs))
-        }
-      }
-
-      Repeater {
-        model: root.items
-
-        Item {
-          id: row
-          required property var modelData
-          readonly property bool current: Protocols.isActive(modelData.status)
-          readonly property bool finished: modelData.status === "done"
-          readonly property bool missed: modelData.status === "missed"
-          readonly property bool expanded: root.expanded[modelData.id] === true
-          width: column.width
-          implicitHeight: Math.max(details.implicitHeight, action.implicitHeight)
+          spacing: Style.space(2)
 
           Label {
-            id: glyph
-            anchors.left: parent.left
-            text: Protocols.GLYPHS[row.modelData.anchor]
-            font.pixelSize: Style.font.iconLarge
-            color: row.current ? Commons.Color.urgent : Commons.Color.popups.text
-            opacity: row.missed ? 0.5 : 1
+            width: parent.width
+            text: strings.t("title")
+            font.pixelSize: Style.font.subtitle
+            font.bold: true
           }
+          Label {
+            width: parent.width
+            visible: text !== ""
+            opacity: 0.7
+            font.pixelSize: Style.font.bodySmall
+            text: root.emptyText !== "" ? root.emptyText
+              : !root.sun || root.sun.kind !== "normal" ? ""
+              : root.placeName !== ""
+                ? strings.t("popup.sun").arg(root.placeName).arg(root.time(root.sun.riseMs)).arg(root.time(root.sun.setMs))
+                : strings.t("popup.sunNoName").arg(root.time(root.sun.riseMs)).arg(root.time(root.sun.setMs))
+          }
+        }
 
-          Column {
-            id: details
-            anchors.left: glyph.right
-            anchors.leftMargin: Style.space(10)
-            anchors.right: action.left
-            anchors.rightMargin: Style.space(10)
-            spacing: Style.space(2)
-            opacity: row.missed ? 0.6 : 1
+        Row {
+          width: parent.width
+          spacing: Style.space(6)
+          Button {
+            text: strings.t("progress.today")
+            selected: !root.showProgress
+            focusable: true
+            onClicked: root.showProgress = false
+          }
+          Button {
+            text: strings.t("progress.title")
+            selected: root.showProgress
+            focusable: true
+            onClicked: root.showProgress = true
+          }
+        }
 
-            Item {
-              width: parent.width
-              implicitHeight: name.implicitHeight
+        Loader {
+          width: parent.width
+          active: root.showProgress && root.service !== null && root.service.stateLoaded
+          visible: active
+          sourceComponent: Component { ProgressView { service: root.service } }
+        }
 
-              Label {
-                id: name
-                text: strings.t(row.modelData.id + ".name")
-                font.bold: true
+        Repeater {
+          model: root.showProgress ? [] : root.items
+
+          Item {
+            id: row
+            required property var modelData
+            readonly property bool current: Protocols.isActive(modelData.status)
+            readonly property bool finished: modelData.status === "done"
+            readonly property bool missed: modelData.status === "missed"
+            readonly property bool expanded: root.expanded[modelData.id] === true
+            width: column.width
+            implicitHeight: Math.max(details.implicitHeight, action.implicitHeight)
+
+            Label {
+              id: glyph
+              anchors.left: parent.left
+              text: Protocols.GLYPHS[row.modelData.anchor]
+              font.pixelSize: Style.font.iconLarge
+              color: row.current ? Commons.Color.urgent : Commons.Color.popups.text
+              opacity: row.missed ? 0.5 : 1
+            }
+
+            Column {
+              id: details
+              anchors.left: glyph.right
+              anchors.leftMargin: Style.space(10)
+              anchors.right: action.left
+              anchors.rightMargin: Style.space(10)
+              spacing: Style.space(2)
+              opacity: row.missed ? 0.6 : 1
+
+              Item {
+                width: parent.width
+                implicitHeight: name.implicitHeight
+
+                Label {
+                  id: name
+                  text: strings.t(row.modelData.id + ".name")
+                  font.bold: true
+                }
+                Label {
+                  anchors.left: name.right
+                  anchors.leftMargin: Style.space(6)
+                  anchors.verticalCenter: name.verticalCenter
+                  opacity: 0.6
+                  text: row.expanded ? Protocols.GLYPHS.less : Protocols.GLYPHS.more
+                }
               }
               Label {
-                anchors.left: name.right
-                anchors.leftMargin: Style.space(6)
-                anchors.verticalCenter: name.verticalCenter
-                opacity: 0.6
-                text: row.expanded ? Protocols.GLYPHS.less : Protocols.GLYPHS.more
+                width: parent.width
+                text: root.statusText(row.modelData)
+                color: row.current ? Commons.Color.urgent
+                  : row.finished ? Commons.Color.accent : Commons.Color.popups.text
               }
-            }
-            Label {
-              width: parent.width
-              text: root.statusText(row.modelData)
-              color: row.current ? Commons.Color.urgent
-                : row.finished ? Commons.Color.accent : Commons.Color.popups.text
-            }
-            Label {
-              width: parent.width
-              visible: row.expanded
-              opacity: 0.7
-              font.pixelSize: Style.font.bodySmall
-              text: strings.t(row.modelData.id === "morning-hydration" ? "morning-hydration.window" : "window").arg(root.time(row.modelData.startMs)).arg(root.time(row.modelData.endMs))
-            }
-            Label {
-              width: parent.width
-              visible: row.expanded
-              opacity: 0.7
-              font.pixelSize: Style.font.bodySmall
-              text: strings.t(row.modelData.id + ".how")
-            }
-          }
-
-          // Click the row, anywhere but its check, for the detail.
-          MouseArea {
-            anchors.left: parent.left
-            anchors.right: action.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.toggleExpanded(row.modelData.id)
-          }
-
-          // The check: an empty circle to tick off, a filled one once done.
-          // Clicking a filled one unticks it.
-          PanelActionButton {
-            id: action
-            anchors.right: parent.right
-            anchors.verticalCenter: details.top
-            anchors.verticalCenterOffset: name.implicitHeight
-            iconText: row.finished ? Protocols.GLYPHS.checked : Protocols.GLYPHS.unchecked
-            fontSize: Style.font.display
-            foreground: row.finished ? Commons.Color.accent : Commons.Color.popups.text
-            hoverColor: Commons.Color.accent
-            opacity: row.finished || row.current ? 1 : 0.6
-            tooltipText: row.finished ? strings.t("check.unmark") : strings.t("check.mark")
-            onClicked: {
-              if (row.finished) {
-                root.service.markUndone(row.modelData.id)
-              } else {
-                root.justDone = row.modelData.id
-                root.service.markDone(row.modelData.id)
+              Label {
+                width: parent.width
+                visible: row.expanded
+                opacity: 0.7
+                font.pixelSize: Style.font.bodySmall
+                text: strings.t(row.modelData.id === "morning-hydration" ? "morning-hydration.window" : "window").arg(root.time(row.modelData.startMs)).arg(root.time(row.modelData.endMs))
+              }
+              Label {
+                width: parent.width
+                visible: row.expanded
+                opacity: 0.7
+                font.pixelSize: Style.font.bodySmall
+                text: strings.t(row.modelData.id + ".how")
               }
             }
 
-            // The tick lands: marking done rebuilds the row, so the new row
-            // plays it once.
-            NumberAnimation on scale {
-              id: land
-              running: false
-              from: 0.9
-              to: 1
-              duration: Style.duration(180)
-              easing.type: Easing.Bezier
-              easing.bezierCurve: Style.easeOut
+            // Click the row, anywhere but its check, for the detail.
+            MouseArea {
+              anchors.left: parent.left
+              anchors.right: action.left
+              anchors.top: parent.top
+              anchors.bottom: parent.bottom
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.toggleExpanded(row.modelData.id)
             }
-            Component.onCompleted: {
-              if (root.justDone !== row.modelData.id) return
-              root.justDone = ""
-              if (row.finished) land.start()
+
+            // The check: an empty circle to tick off, a filled one once done.
+            // Clicking a filled one unticks it.
+            PanelActionButton {
+              id: action
+              anchors.right: parent.right
+              anchors.verticalCenter: details.top
+              anchors.verticalCenterOffset: name.implicitHeight
+              iconText: row.finished ? Protocols.GLYPHS.checked : Protocols.GLYPHS.unchecked
+              fontSize: Style.font.display
+              foreground: row.finished ? Commons.Color.accent : Commons.Color.popups.text
+              hoverColor: Commons.Color.accent
+              opacity: row.finished || row.current ? 1 : 0.6
+              tooltipText: row.finished ? strings.t("check.unmark") : strings.t("check.mark")
+              onClicked: {
+                if (row.finished) {
+                  root.service.markUndone(row.modelData.id)
+                } else {
+                  root.justDone = row.modelData.id
+                  root.service.markDone(row.modelData.id)
+                }
+              }
+
+              // The tick lands: marking done rebuilds the row, so the new row
+              // plays it once.
+              NumberAnimation on scale {
+                id: land
+                running: false
+                from: 0.9
+                to: 1
+                duration: Style.duration(180)
+                easing.type: Easing.Bezier
+                easing.bezierCurve: Style.easeOut
+              }
+              Component.onCompleted: {
+                if (root.justDone !== row.modelData.id) return
+                root.justDone = ""
+                if (row.finished) land.start()
+              }
             }
           }
         }
-      }
 
-      Label {
-        width: parent.width
-        visible: root.items.some(function(item) { return item.needsSky })
-        opacity: 0.7
-        font.pixelSize: Style.font.bodySmall
-        text: root.dose
-          ? strings.t("sky." + root.dose.sky).arg(Commons.I18n.formatNumber(root.dose.minutes))
-          : strings.t("sky.unknown")
+        Label {
+          width: parent.width
+          visible: !root.showProgress && root.items.some(function(item) { return item.needsSky })
+          opacity: 0.7
+          font.pixelSize: Style.font.bodySmall
+          text: root.dose
+            ? strings.t("sky." + root.dose.sky).arg(Commons.I18n.formatNumber(root.dose.minutes))
+            : strings.t("sky.unknown")
+        }
       }
     }
   }

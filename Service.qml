@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import "Protocols.js" as Protocols
+import "History.js" as History
 
 // Works out when each protocol is due and announces it once. One copy runs for
 // the whole shell, whatever the number of bars; BarWidget.qml only draws it.
@@ -36,6 +37,7 @@ Item {
   property string day: ""
   property var done: ({})
   property var notified: ({})
+  property var history: ({})
 
   // ---- Cloud cover, fetched when a protocol comes due or the card opens.
   property var cloudCover: null
@@ -75,11 +77,14 @@ Item {
   }
 
   function save() {
-    stateFile.setText(JSON.stringify({ day: day, done: done, notified: notified, location: detectedLocation }, null, 2) + "\n")
+    if (!stateLoaded) return
+    history = History.record(history, day, itemsAt(nowMs), done)
+    stateFile.setText(JSON.stringify({ day: day, done: done, notified: notified, location: detectedLocation, history: history }, null, 2) + "\n")
   }
 
   function applyState(raw) {
     var state = Protocols.parseState(raw, Protocols.dayKey(Date.now()))
+    history = History.restore(raw, state.day, Protocols.PROTOCOLS.map(function(p) { return p.id }))
     day = state.day
     done = state.done
     notified = state.notified
@@ -105,6 +110,8 @@ Item {
     if (resumed) detectLocation()
 
     var current = itemsAt(now)
+    var recorded = History.record(history, day, current, done)
+    if (recorded !== history) { history = recorded; save() }
     var due = []
     var active = {}
     current.forEach(function(item) {
@@ -159,6 +166,7 @@ Item {
   }
 
   function markDone(id) {
+    tick()
     if (!stateLoaded || !Protocols.knownId(id) || done[id]) return
     var marks = Object.assign({}, done)
     marks[id] = Date.now()
@@ -168,6 +176,7 @@ Item {
   }
 
   function markUndone(id) {
+    tick()
     if (!stateLoaded || !done[id]) return
     var marks = Object.assign({}, done)
     delete marks[id]
@@ -272,6 +281,9 @@ Item {
 
     function done(id: string): void { root.markDone(id) }
     function undo(id: string): void { root.markUndone(id) }
+    function progress(): string {
+      return JSON.stringify({ summary: History.summary(root.history, root.day), history: root.history })
+    }
     function status(): string {
       return JSON.stringify({ location: root.location, sun: root.sun, items: root.items, dose: root.dose })
     }
