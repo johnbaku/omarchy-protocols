@@ -56,11 +56,10 @@ Item {
   Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 
   function itemsAt(ms) {
-    if (!location) return []
-    return Protocols.windows(location.latitude, location.longitude, ms).map(function(win) {
+    return Protocols.windows(location ? location.latitude : null, location ? location.longitude : null, ms).map(function(win) {
       var doneAt = done[win.id] || 0
       return {
-        id: win.id, anchor: win.anchor, startMs: win.startMs, idealMs: win.idealMs, endMs: win.endMs,
+        id: win.id, anchor: win.anchor, needsSky: win.needsSky, startMs: win.startMs, idealMs: win.idealMs, endMs: win.endMs,
         doneAt: doneAt, status: Protocols.statusOf(win, ms, doneAt)
       }
     })
@@ -127,15 +126,21 @@ Item {
     notified = marks
     save()
     awaitingSky = awaitingSky.concat(due)
+    // Clock reminders should never wait for a weather request.
+    announce(false)
+    if (awaitingSky.length === 0) return
     if (dose) announce()
     else if (!refreshSky()) announce()
   }
 
   // Send the waiting reminders, with the dose if the cloud cover is known.
-  function announce() {
-    var waiting = awaitingSky
-    awaitingSky = []
-    itemsAt(Date.now()).forEach(function(item) {
+  function announce(includeSky) {
+    var current = itemsAt(Date.now())
+    var waiting = awaitingSky.filter(function(id) {
+      return includeSky !== false || current.some(function(item) { return item.id === id && !item.needsSky })
+    })
+    awaitingSky = awaitingSky.filter(function(id) { return waiting.indexOf(id) === -1 })
+    current.forEach(function(item) {
       if (waiting.indexOf(item.id) === -1 || !Protocols.isActive(item.status)) return
       var late = item.status === "late"
       var sky = dose
@@ -146,7 +151,7 @@ Item {
       // it is still there when you sit down after the window has opened.
       Quickshell.execDetached([
         "omarchy-notification-send", "--app-name", notificationApp, "-g", Protocols.GLYPHS[item.anchor],
-        "-u", "critical", strings.t(item.id + ".name"), body + "\n" + sky,
+        "-u", "critical", strings.t(item.id + ".name"), body + (item.needsSky ? "\n" + sky : ""),
         "--action", strings.t("action.done"), "omarchy-shell", "-q", ipcTarget, "done", item.id
       ])
       if (onScreen.indexOf(item.id) === -1) onScreen = onScreen.concat([item.id])

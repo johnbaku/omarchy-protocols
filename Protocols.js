@@ -7,19 +7,22 @@ var DEG = Math.PI / 180
 var MINUTE = 60000
 var DAY = 86400000
 
-// Each protocol's window, in minutes from its anchor (sunrise or sunset):
+// Each protocol's window, in minutes from its anchor (sunrise, sunset, or
+// local midnight for a morning reminder):
 // it becomes due at `start`, is at its best until `ideal`, and can no longer
 // be done after `end`. To add a protocol, add a row here and its strings in
 // i18n/ (<id>.name, <id>.how, <id>.notify, <id>.notifyLate).
 var PROTOCOLS = [
-  { id: "morning-light", anchor: "sunrise", start: 30, ideal: 60, end: 180 },
-  { id: "evening-light", anchor: "sunset", start: -45, ideal: 0, end: 0 }
+  { id: "morning-hydration", anchor: "morning", start: 360, ideal: 720, end: 720, needsSky: false },
+  { id: "morning-light", anchor: "sunrise", start: 30, ideal: 60, end: 180, needsSky: true },
+  { id: "evening-light", anchor: "sunset", start: -45, ideal: 0, end: 0, needsSky: true }
 ]
 
 // Nerd Font glyphs: the rising sun, the setting sun, the plain one the bar
 // shows when nothing is due and the check it shows once the day is done, a
 // row's check empty and ticked, and the chevrons that open and close a row.
 var GLYPHS = {
+  morning: String.fromCodePoint(0xF058C),
   sunrise: String.fromCodePoint(0xF059C),
   sunset: String.fromCodePoint(0xF059B),
   idle: String.fromCodePoint(0xF05A8),
@@ -89,16 +92,27 @@ function civilNoonMs(ms) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12).getTime()
 }
 
-// Today's window for every protocol at a place, or [] where the sun does not
-// rise or set today.
+// Local clock reminders remain available without a location or sunrise.
+// Construct clock times as local dates so DST does not shift the schedule.
 function windows(lat, lon, nowMs) {
-  var sun = sunTimes(lat, lon, civilNoonMs(nowMs))
-  if (sun.kind !== "normal") return []
-  return PROTOCOLS.map(function(p) {
+  var sun = typeof lat === "number" && typeof lon === "number"
+    ? sunTimes(lat, lon, civilNoonMs(nowMs)) : null
+  var d = new Date(nowMs)
+  function clockTime(minutes) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, minutes).getTime()
+  }
+  return PROTOCOLS.filter(function(p) {
+    return p.anchor === "morning" || (sun && sun.kind === "normal")
+  }).map(function(p) {
+    if (p.anchor === "morning") return {
+      id: p.id, anchor: p.anchor, needsSky: p.needsSky,
+      startMs: clockTime(p.start), idealMs: clockTime(p.ideal), endMs: clockTime(p.end)
+    }
     var anchor = p.anchor === "sunrise" ? sun.riseMs : sun.setMs
     return {
       id: p.id,
       anchor: p.anchor,
+      needsSky: p.needsSky,
       startMs: anchor + p.start * MINUTE,
       idealMs: anchor + p.ideal * MINUTE,
       endMs: anchor + p.end * MINUTE

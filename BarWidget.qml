@@ -49,6 +49,8 @@ BarWidget {
   }
 
   function statusText(item) {
+    if (item.id === "morning-hydration" && Protocols.isActive(item.status)) return strings.t("morning-hydration.due")
+    if (item.id === "morning-hydration" && item.status === "missed") return strings.t("morning-hydration.ended")
     if (item.status === "upcoming") return strings.t("status.upcoming").arg(time(item.startMs))
     if (item.status === "due") return strings.t("status.due").arg(time(item.idealMs))
     if (item.status === "late") return strings.t("status.late").arg(time(item.endMs))
@@ -64,7 +66,7 @@ BarWidget {
 
   readonly property string emptyText: !service || !service.stateLoaded ? strings.t("popup.starting")
     : !service.location ? strings.t("popup.noLocation")
-    : items.length === 0 ? strings.t("popup.noSun")
+    : sun && sun.kind !== "normal" ? strings.t("popup.noSun")
     : ""
 
   WidgetButton {
@@ -192,7 +194,7 @@ BarWidget {
               visible: row.expanded
               opacity: 0.7
               font.pixelSize: Style.font.bodySmall
-              text: strings.t("window").arg(root.time(row.modelData.startMs)).arg(root.time(row.modelData.endMs))
+              text: strings.t(row.modelData.id === "morning-hydration" ? "morning-hydration.window" : "window").arg(root.time(row.modelData.startMs)).arg(root.time(row.modelData.endMs))
             }
             Label {
               width: parent.width
@@ -257,7 +259,7 @@ BarWidget {
 
       Label {
         width: parent.width
-        visible: root.items.length > 0
+        visible: root.items.some(function(item) { return item.needsSky })
         opacity: 0.7
         font.pixelSize: Style.font.bodySmall
         text: root.dose
