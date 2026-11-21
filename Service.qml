@@ -39,6 +39,10 @@ Item {
   // When each snoozed reminder comes back.
   property var snoozed: ({})
 
+  // ---- When you get up and go to bed, set in the card's settings or with
+  //      the wake and bed commands.
+  property var schedule: Protocols.parseSchedule(null)
+
   // ---- Cloud cover, fetched when a protocol comes due or the card opens.
   property var cloudCover: null
   property real cloudAtMs: 0
@@ -58,10 +62,10 @@ Item {
   Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 
   function itemsAt(ms) {
-    return Protocols.windows(location ? location.latitude : null, location ? location.longitude : null, ms).map(function(win) {
+    return Protocols.windows(location ? location.latitude : null, location ? location.longitude : null, ms, schedule).map(function(win) {
       var doneAt = done[win.id] || 0
       return {
-        id: win.id, anchor: win.anchor, needsSky: win.needsSky, startMs: win.startMs, idealMs: win.idealMs, endMs: win.endMs,
+        id: win.id, anchor: win.anchor, glyph: win.glyph, needsSky: win.needsSky, ownStatus: win.ownStatus, startMs: win.startMs, idealMs: win.idealMs, endMs: win.endMs,
         doneAt: doneAt, status: Protocols.statusOf(win, ms, doneAt)
       }
     })
@@ -77,7 +81,7 @@ Item {
   }
 
   function save() {
-    stateFile.setText(JSON.stringify({ day: day, done: done, notified: notified, snoozed: snoozed, location: detectedLocation }, null, 2) + "\n")
+    stateFile.setText(JSON.stringify({ day: day, done: done, notified: notified, snoozed: snoozed, location: detectedLocation, schedule: schedule }, null, 2) + "\n")
   }
 
   function applyState(raw) {
@@ -86,6 +90,7 @@ Item {
     done = state.done
     notified = state.notified
     snoozed = state.snoozed
+    schedule = state.schedule
     if (!detectedLocation) detectedLocation = state.location
     stateLoaded = true
     detectLocation()
@@ -155,11 +160,11 @@ Item {
       var sky = dose
         ? strings.t("sky." + dose.sky).arg(I18n.formatNumber(dose.minutes))
         : strings.t("sky.unknown")
-      var body = strings.t(item.id + (late ? ".notifyLate" : ".notify")).arg(formatTime(late ? item.endMs : item.idealMs))
+      var body = Protocols.fill(strings.t(item.id + (late ? ".notifyLate" : ".notify")), formatTime(late ? item.endMs : item.idealMs))
       // Critical keeps it on screen until it is dismissed or marked done, so
       // it is still there when you sit down after the window has opened.
       Quickshell.execDetached([
-        "omarchy-notification-send", "--app-name", notificationApp, "-g", Protocols.GLYPHS[item.anchor],
+        "omarchy-notification-send", "--app-name", notificationApp, "-g", Protocols.GLYPHS[item.glyph],
         "-u", "critical", strings.t(item.id + ".name"), body + (item.needsSky ? "\n" + sky : ""),
         "--action", strings.t("action.done"), "omarchy-shell", "-q", ipcTarget, "done", item.id,
         "--action", strings.t("action.snooze").arg(I18n.formatNumber(Protocols.SNOOZE_MS / 60000)),
@@ -197,6 +202,28 @@ Item {
     var marks = Object.assign({}, done)
     delete marks[id]
     done = marks
+    save()
+    tick()
+  }
+
+  // Set the wake or bed time from "6:30". Answers with the time now in force,
+  // so one that was not understood shows as unchanged.
+  function setScheduleTime(which, text) {
+    var minutes = Protocols.parseClock(text)
+    if (stateLoaded && minutes !== null) {
+      var next = { wake: schedule.wake, bed: schedule.bed }
+      next[which] = minutes
+      schedule = next
+      save()
+      tick()
+    }
+    return formatTime(Protocols.clockMs(nowMs, schedule[which]))
+  }
+
+  // The settings' earlier and later buttons.
+  function shiftScheduleTime(which, minutes) {
+    if (!stateLoaded) return
+    schedule = Protocols.shiftSchedule(schedule, which, minutes)
     save()
     tick()
   }
@@ -306,8 +333,10 @@ Item {
     function done(id: string): void { root.markDone(id) }
     function undo(id: string): void { root.markUndone(id) }
     function snooze(id: string): void { root.snooze(id) }
+    function wake(time: string): string { return root.setScheduleTime("wake", time) }
+    function bed(time: string): string { return root.setScheduleTime("bed", time) }
     function status(): string {
-      return JSON.stringify({ location: root.location, sun: root.sun, items: root.items, dose: root.dose })
+      return JSON.stringify({ location: root.location, sun: root.sun, schedule: root.schedule, items: root.items, dose: root.dose })
     }
   }
 }

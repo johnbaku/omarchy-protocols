@@ -38,11 +38,34 @@
   "tooltip.allDone": "All protocols done today",
   "tooltip.finished": "No more protocols today",
 
+  "settings.title": "Settings",
+  "settings.back": "Back",
+  "settings.wake": "Wake time",
+  "settings.wakeHelp": "Morning hydration starts here.",
+  "settings.bed": "Bedtime",
+  "settings.bedHelp": "Dim the lights starts two hours before.",
+  "settings.earlier": "15 minutes earlier",
+  "settings.later": "15 minutes later",
+  "reminder.window": "Reminder: %1 – %2",
+
   "morning-hydration.name": "Morning hydration",
-  "morning-hydration.how": "Drink 16–32 US fl oz (about 500 mL–1 L) of water soon after waking. Electrolytes are optional; Huberman includes them in his personal routine. The reminder runs from 6 a.m. to noon because the plugin does not know your wake time.",
+  "morning-hydration.how": "Drink 16–32 US fl oz (about 500 mL–1 L) of water soon after waking. Electrolytes are optional; Huberman includes them in his personal routine. The reminder runs for six hours from your wake time.",
   "morning-hydration.notify": "Drink 16–32 US fl oz (about 500 mL–1 L) of water after waking. Electrolytes are optional. This reminder stays open until %1.",
   "morning-hydration.notifyLate": "Drink 16–32 US fl oz (about 500 mL–1 L) of water after waking. Electrolytes are optional. This reminder stays open until %1.",
+  "morning-hydration.upcoming": "Starts at %1",
   "morning-hydration.due": "Drink water after waking",
   "morning-hydration.ended": "Morning reminder ended",
-  "morning-hydration.window": "Reminder: %1 – %2"
+
+  "nsdr.name": "NSDR",
+  "nsdr.how": "Non-sleep deep rest: lie down and follow a guided NSDR or yoga nidra recording. Ten minutes helps; aim for 20–30. The reminder runs from 2 to 5 p.m., when the afternoon dip usually lands, but a session works at any time of day.",
+  "nsdr.notify": "Afternoon dip? Lie down for a 10–30 minute NSDR or yoga nidra session, any time before %1.",
+  "nsdr.notifyLate": "Afternoon dip? Lie down for a 10–30 minute NSDR or yoga nidra session, any time before %1.",
+
+  "dim-lights.name": "Dim the lights",
+  "dim-lights.how": "From 10 p.m. to 4 a.m., avoid bright light, especially overhead lights. Use only as much light as you need to move about safely. Candlelight and moonlight are fine. Start earlier if you can: in the two hours before bed, keep lights low and warm and put screens away for the last hour. The reminder arrives two hours before your bedtime.",
+  "dim-lights.notify": "Two hours to bedtime. Turn off the overhead lights, keep the rest low and warm, and put screens away for the last hour.",
+  "dim-lights.notifyLate": "Two hours to bedtime. Turn off the overhead lights, keep the rest low and warm, and put screens away for the last hour.",
+  "dim-lights.upcoming": "Starts at %1",
+  "dim-lights.due": "Keep the lights low and warm",
+  "dim-lights.ended": "Reminder ended"
 }

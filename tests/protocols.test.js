@@ -30,7 +30,8 @@ test("sunrise and sunset match published tables", () => {
 test("polar day and night have no sunrise", () => {
   assert.strictEqual(P.sunTimes(78.22, 15.65, Date.parse("2026-06-21T11:00:00Z")).kind, "midnightSun")
   assert.strictEqual(P.sunTimes(78.22, 15.65, Date.parse("2026-12-21T11:00:00Z")).kind, "polarNight")
-  assert.deepStrictEqual(P.windows(78.22, 15.65, Date.parse("2026-12-21T11:00:00Z")).map(p => p.id), ["morning-hydration"])
+  assert.deepStrictEqual(P.windows(78.22, 15.65, Date.parse("2026-12-21T11:00:00Z")).map(p => p.id),
+    ["morning-hydration", "nsdr", "dim-lights"])
 })
 
 test("windows hang off sunrise and sunset", () => {
@@ -97,7 +98,7 @@ test("state keeps today's marks and drops everything else", () => {
   assert.deepStrictEqual(tomorrow.notified, {})
   assert.strictEqual(tomorrow.location.name, "Victoria")
 
-  assert.deepStrictEqual(P.parseState("garbage", "2026-11-20"), { day: "2026-11-20", done: {}, notified: {}, snoozed: {}, location: null })
+  assert.deepStrictEqual(P.parseState("garbage", "2026-11-20"), { day: "2026-11-20", done: {}, notified: {}, snoozed: {}, location: null, schedule: { wake: 420, bed: 1380 } })
 })
 
 test("the day key is the computer's own calendar day", () => {
@@ -113,8 +114,8 @@ test("hydration works without location and uses local morning hours, including D
     const [water] = P.windows(null, null, now)
     assert.strictEqual(water.id, "morning-hydration")
     assert.strictEqual(water.needsSky, false)
-    assert.strictEqual(water.startMs, new Date(2026, month, day, 6).getTime())
-    assert.strictEqual(water.endMs, new Date(2026, month, day, 12).getTime())
+    assert.strictEqual(water.startMs, new Date(2026, month, day, 7).getTime())
+    assert.strictEqual(water.endMs, new Date(2026, month, day, 13).getTime())
     assert.strictEqual(P.statusOf(water, water.startMs - 1), "upcoming")
     assert.strictEqual(P.statusOf(water, water.startMs), "due")
     assert.strictEqual(P.statusOf(water, water.endMs - 1), "due")
@@ -148,8 +149,8 @@ test("hydration is announced immediately without sky advice while light waits fo
     var I18n = { formatNumber: String }
     function formatTime() { return "12:00" }
     function itemsAt() { return [
-      { id: "morning-hydration", anchor: "morning", status: "due", needsSky: false },
-      { id: "morning-light", anchor: "sunrise", status: "due", needsSky: true }
+      { id: "morning-hydration", anchor: "wake", glyph: "water", status: "due", needsSky: false },
+      { id: "morning-light", anchor: "sunrise", glyph: "sunrise", status: "due", needsSky: true }
     ] }
     ${announce}
     announce(false)
@@ -178,4 +179,59 @@ test("a snoozed reminder comes back after five minutes", () => {
   const raw = JSON.stringify({ day: "2026-11-19", snoozed: { "morning-light": until, "evening-light": "soon", "unknown": 5 } })
   assert.deepStrictEqual(P.parseState(raw, "2026-11-19").snoozed, { "morning-light": until })
   assert.deepStrictEqual(P.parseState(raw, "2026-11-20").snoozed, {})
+})
+
+test("clock protocols follow the clock and the wake time, earliest first", () => {
+  const now = new Date(2026, 10, 19, 9).getTime()
+  const at = (h, m = 0) => new Date(2026, 10, 19, h, m).getTime()
+  const byId = schedule => Object.fromEntries(P.windows(null, null, now, schedule).map(w => [w.id, w]))
+
+  let w = byId(undefined)
+  assert.deepStrictEqual([w["morning-hydration"].startMs, w["morning-hydration"].endMs], [at(7), at(13)])
+  assert.deepStrictEqual([w["nsdr"].startMs, w["nsdr"].endMs], [at(14), at(17)])
+  assert.deepStrictEqual([w["dim-lights"].startMs, w["dim-lights"].endMs], [at(21), at(24)])
+
+  // Up at 7:30, in bed at 21:00: the lights reminder opens two hours before.
+  w = byId({ wake: 450, bed: 1260 })
+  assert.deepStrictEqual([w["morning-hydration"].startMs, w["morning-hydration"].endMs], [at(7, 30), at(13, 30)])
+  assert.deepStrictEqual([w["nsdr"].startMs, w["dim-lights"].startMs, w["dim-lights"].endMs], [at(14), at(19), at(22)])
+
+  // A bedtime past midnight still gets its reminder before the day ends.
+  for (const [bed, start] of [[1425, at(21, 45)], [30, at(22, 30)], [120, at(23)], [300, at(23)]]) {
+    w = byId({ wake: 450, bed })
+    assert.deepStrictEqual([w["dim-lights"].startMs, w["dim-lights"].endMs], [start, at(24)])
+  }
+
+  const starts = P.windows(48.4359, -123.35155, now).map(p => p.startMs)
+  assert.deepStrictEqual(starts, starts.slice().sort((a, b) => a - b))
+  assert.strictEqual(starts.length, P.PROTOCOLS.length)
+})
+
+test("wake and bed times are parsed strictly, shift in steps, and survive the day", () => {
+  assert.strictEqual(P.parseClock("6:30"), 390)
+  assert.strictEqual(P.parseClock(" 22:15 "), 1335)
+  assert.strictEqual(P.parseClock("0:00"), 0)
+  for (const bad of ["24:00", "6:60", "6", "6:3", "six", "", null, "6:30pm", "-1:00"]) assert.strictEqual(P.parseClock(bad), null)
+
+  assert.deepStrictEqual(P.DEFAULT_SCHEDULE, { wake: 420, bed: 1380 })
+  assert.deepStrictEqual(P.parseSchedule({ wake: 450, bed: 30 }), { wake: 450, bed: 30 })
+  for (const bad of [{ wake: "450", bed: 1440 }, { wake: 6.5 }, null]) assert.deepStrictEqual(P.parseSchedule(bad), P.DEFAULT_SCHEDULE)
+  assert.deepStrictEqual(P.shiftSchedule({ wake: 420, bed: 1380 }, "wake", -P.SCHEDULE_STEP), { wake: 405, bed: 1380 })
+  assert.deepStrictEqual(P.shiftSchedule({ wake: 0, bed: 1425 }, "wake", -15), { wake: 1425, bed: 1425 })
+  assert.deepStrictEqual(P.shiftSchedule({ wake: 420, bed: 1425 }, "bed", 15), { wake: 420, bed: 0 })
+  assert.deepStrictEqual(P.shiftSchedule({ wake: 420, bed: 1380 }, "nap", 15), { wake: 420, bed: 1380 })
+
+  const raw = JSON.stringify({ day: "2026-11-19", schedule: { wake: 450, bed: 30 } })
+  assert.deepStrictEqual(P.parseState(raw, "2026-11-20").schedule, { wake: 450, bed: 30 })
+})
+
+test("every protocol has its strings, and fill leaves plain text alone", () => {
+  const strings = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "i18n", "en.json"), "utf8"))
+  for (const p of P.PROTOCOLS) {
+    const keys = ["name", "how", "notify", "notifyLate"].concat(p.ownStatus ? ["upcoming", "due", "ended"] : [])
+    for (const key of keys) assert.ok(strings[p.id + "." + key], p.id + "." + key)
+    assert.ok(P.GLYPHS[p.glyph], p.id + " glyph")
+  }
+  assert.strictEqual(P.fill("Best before %1.", "8:00"), "Best before 8:00.")
+  assert.strictEqual(P.fill("Fine now.", "8:00"), "Fine now.")
 })
