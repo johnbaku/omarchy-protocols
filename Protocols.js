@@ -10,22 +10,43 @@ var DAY = 86400000
 // How long the Snooze button on a reminder puts it off.
 var SNOOZE_MS = 5 * MINUTE
 
-// Each protocol's window, in minutes from its anchor (sunrise, sunset, or
-// local midnight for a morning reminder):
+// When you get up and go to bed, in minutes after local midnight, unless you
+// say otherwise: 7 a.m. and 11 p.m., about when most adults do. A bedtime at
+// or before the wake time is tomorrow's.
+var DEFAULT_SCHEDULE = { wake: 420, bed: 1380 }
+
+// How far one press of the card's earlier and later buttons moves a time.
+var SCHEDULE_STEP = 15
+
+// Each protocol's window, in minutes from its anchor (sunrise, sunset, your
+// wake time, your bedtime, or "clock" for local midnight):
 // it becomes due at `start`, is at its best until `ideal`, and can no longer
-// be done after `end`. To add a protocol, add a row here and its strings in
-// i18n/ (<id>.name, <id>.how, <id>.notify, <id>.notifyLate).
+// be done after `end`. `needsSky` marks the light protocols, which need a
+// location and say how long to stay out. `ownStatus` marks a reminder rather
+// than a task with a deadline: the card words its status from the protocol's
+// own strings. To add a protocol, add a row here and its strings in i18n/
+// (<id>.name, <id>.how, <id>.notify, <id>.notifyLate, and with ownStatus
+// <id>.upcoming, <id>.due and <id>.ended).
 var PROTOCOLS = [
-  { id: "morning-hydration", anchor: "morning", start: 360, ideal: 720, end: 720, needsSky: false },
-  { id: "morning-light", anchor: "sunrise", start: 30, ideal: 60, end: 180, needsSky: true },
-  { id: "evening-light", anchor: "sunset", start: -45, ideal: 0, end: 0, needsSky: true }
+  { id: "morning-hydration", anchor: "wake", start: 0, ideal: 360, end: 360, glyph: "water", ownStatus: true },
+  { id: "morning-light", anchor: "sunrise", start: 30, ideal: 60, end: 180, glyph: "sunrise", needsSky: true },
+  { id: "nsdr", anchor: "clock", start: 840, ideal: 1020, end: 1020, glyph: "rest" },
+  { id: "evening-light", anchor: "sunset", start: -45, ideal: 0, end: 0, glyph: "sunset", needsSky: true },
+  { id: "dim-lights", anchor: "bed", start: -120, ideal: 60, end: 60, glyph: "night", ownStatus: true }
 ]
 
-// Nerd Font glyphs: the rising sun, the setting sun, the plain one the bar
-// shows when nothing is due and the check it shows once the day is done, a
-// row's check empty and ticked, and the chevrons that open and close a row.
+// Nerd Font glyphs: one per protocol, the plain sun the bar shows when
+// nothing is due and the check it shows once the day is done, a row's check
+// empty and ticked, the chevrons that open and close a row, and the card's
+// settings buttons.
 var GLYPHS = {
-  morning: String.fromCodePoint(0xF058C),
+  water: String.fromCodePoint(0xF058C),
+  rest: String.fromCodePoint(0xF117B),
+  night: String.fromCodePoint(0xF0594),
+  earlier: String.fromCodePoint(0xF0374),
+  later: String.fromCodePoint(0xF0415),
+  settings: String.fromCodePoint(0xF0493),
+  back: String.fromCodePoint(0xF004D),
   sunrise: String.fromCodePoint(0xF059C),
   sunset: String.fromCodePoint(0xF059B),
   idle: String.fromCodePoint(0xF05A8),
@@ -95,32 +116,67 @@ function civilNoonMs(ms) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12).getTime()
 }
 
-// Local clock reminders remain available without a location or sunrise.
-// Construct clock times as local dates so DST does not shift the schedule.
-function windows(lat, lon, nowMs) {
+// A clock time today, `minutes` after local midnight. Built as a local date,
+// so a DST change does not shift the schedule.
+function clockMs(nowMs, minutes) {
+  var d = new Date(nowMs)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, minutes).getTime()
+}
+
+// "6:30" or "22:15" as minutes after midnight, or null.
+function parseClock(text) {
+  var m = /^([0-9]{1,2}):([0-9]{2})$/.exec(String(text === undefined || text === null ? "" : text).trim())
+  if (!m) return null
+  var hours = parseInt(m[1], 10), minutes = parseInt(m[2], 10)
+  return hours < 24 && minutes < 60 ? hours * 60 + minutes : null
+}
+
+// A saved {"wake", "bed"} schedule, with the default for anything unusable.
+function parseSchedule(data) {
+  function minutes(value, fallback) {
+    return typeof value === "number" && Math.floor(value) === value && value >= 0 && value < 1440 ? value : fallback
+  }
+  var given = data && typeof data === "object" ? data : {}
+  return { wake: minutes(given.wake, DEFAULT_SCHEDULE.wake), bed: minutes(given.bed, DEFAULT_SCHEDULE.bed) }
+}
+
+// A schedule with its wake or bed time moved by `minutes`, wrapping at
+// midnight.
+function shiftSchedule(schedule, which, minutes) {
+  var next = parseSchedule(schedule)
+  if (which === "wake" || which === "bed") next[which] = ((next[which] + minutes) % 1440 + 1440) % 1440
+  return next
+}
+
+// Today's windows, earliest first. The light protocols need a location and a
+// sun that rises and sets; the rest run off the clock and the schedule. The
+// day's marks reset at midnight, so a bedtime window is held inside today: it
+// opens by 11 p.m. and closes by midnight, however late the bedtime.
+function windows(lat, lon, nowMs, schedule) {
   var sun = typeof lat === "number" && typeof lon === "number"
     ? sunTimes(lat, lon, civilNoonMs(nowMs)) : null
-  var d = new Date(nowMs)
-  function clockTime(minutes) {
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, minutes).getTime()
+  var times = parseSchedule(schedule)
+  var bed = times.bed <= times.wake ? times.bed + 1440 : times.bed
+  function at(p, minutes) {
+    if (p.anchor === "sunrise") return sun.riseMs + minutes * MINUTE
+    if (p.anchor === "sunset") return sun.setMs + minutes * MINUTE
+    if (p.anchor === "bed") return clockMs(nowMs, Math.min(bed + minutes, minutes === p.start ? 1380 : 1440))
+    return clockMs(nowMs, (p.anchor === "wake" ? times.wake : 0) + minutes)
   }
   return PROTOCOLS.filter(function(p) {
-    return p.anchor === "morning" || (sun && sun.kind === "normal")
+    return (p.anchor !== "sunrise" && p.anchor !== "sunset") || (sun && sun.kind === "normal")
   }).map(function(p) {
-    if (p.anchor === "morning") return {
-      id: p.id, anchor: p.anchor, needsSky: p.needsSky,
-      startMs: clockTime(p.start), idealMs: clockTime(p.ideal), endMs: clockTime(p.end)
-    }
-    var anchor = p.anchor === "sunrise" ? sun.riseMs : sun.setMs
     return {
       id: p.id,
       anchor: p.anchor,
-      needsSky: p.needsSky,
-      startMs: anchor + p.start * MINUTE,
-      idealMs: anchor + p.ideal * MINUTE,
-      endMs: anchor + p.end * MINUTE
+      glyph: p.glyph,
+      needsSky: p.needsSky === true,
+      ownStatus: p.ownStatus === true,
+      startMs: at(p, p.start),
+      idealMs: at(p, p.ideal),
+      endMs: at(p, p.end)
     }
-  })
+  }).sort(function(a, b) { return a.startMs - b.startMs })
 }
 
 // "done", "upcoming", "due" (in its best stretch), "late" (still worth doing)
@@ -177,6 +233,11 @@ function parseLocation(raw) {
   }
 }
 
+// A string with its %1, if it has one, filled in.
+function fill(text, value) {
+  return String(text).replace("%1", value)
+}
+
 function knownId(id) {
   for (var i = 0; i < PROTOCOLS.length; i++) if (PROTOCOLS[i].id === id) return true
   return false
@@ -189,14 +250,16 @@ function shouldAnnounce(notified, snoozedUntil, nowMs) {
 }
 
 // The saved state for `day`: when each protocol was done, which have been
-// announced, when each snoozed one comes back, and the last place the network
-// was located. Another day's marks are dropped; anything malformed is too.
+// announced, when each snoozed one comes back, the last place the network
+// was located, and the wake and bed times. Another day's marks are dropped;
+// anything malformed is too.
 function parseState(raw, day) {
-  var state = { day: day, done: {}, notified: {}, snoozed: {}, location: null }
+  var state = { day: day, done: {}, notified: {}, snoozed: {}, location: null, schedule: parseSchedule(null) }
   try {
     var data = JSON.parse(String(raw || ""))
     if (!data || typeof data !== "object") return state
     state.location = parseLocation(data.location)
+    state.schedule = parseSchedule(data.schedule)
     if (data.day !== day) return state
     PROTOCOLS.forEach(function(p) {
       var at = data.done ? data.done[p.id] : null
@@ -214,6 +277,13 @@ if (typeof module !== "undefined") {
     PROTOCOLS: PROTOCOLS,
     GLYPHS: GLYPHS,
     SNOOZE_MS: SNOOZE_MS,
+    DEFAULT_SCHEDULE: DEFAULT_SCHEDULE,
+    SCHEDULE_STEP: SCHEDULE_STEP,
+    shiftSchedule: shiftSchedule,
+    clockMs: clockMs,
+    parseClock: parseClock,
+    parseSchedule: parseSchedule,
+    fill: fill,
     solar: solar,
     solarNoonMs: solarNoonMs,
     sunTimes: sunTimes,

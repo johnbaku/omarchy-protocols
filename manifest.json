@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "johnbaku",
   "license": "MIT",
-  "description": "Reminds you of morning hydration and morning and evening sunlight, with light reminders timed to your local sunrise and sunset.",
+  "description": "Reminds you of daily health protocols: hydration, sunlight, NSDR and dim evening lights, timed to your local sunrise and sunset and your wake and bed times.",
   "kinds": ["service", "bar-widget"],
   "entryPoints": {
     "service": "Service.qml",

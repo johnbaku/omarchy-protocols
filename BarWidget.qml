@@ -20,10 +20,15 @@ BarWidget {
   readonly property string placeName: service && service.location ? service.location.name : ""
 
   property bool popupOpen: false
+  // The card's second screen, reached from the gear in its corner.
+  property bool showSettings: false
   function close() { popupOpen = false }
   onPopupOpenChanged: {
     if (popupOpen && service) service.refreshSky()
-    if (!popupOpen) expanded = ({})
+    if (!popupOpen) {
+      expanded = ({})
+      showSettings = false
+    }
   }
 
   readonly property int doneCount: items.filter(function(item) { return item.status === "done" }).length
@@ -49,8 +54,9 @@ BarWidget {
   }
 
   function statusText(item) {
-    if (item.id === "morning-hydration" && Protocols.isActive(item.status)) return strings.t("morning-hydration.due")
-    if (item.id === "morning-hydration" && item.status === "missed") return strings.t("morning-hydration.ended")
+    if (item.ownStatus && item.status === "upcoming") return Protocols.fill(strings.t(item.id + ".upcoming"), time(item.startMs))
+    if (item.ownStatus && Protocols.isActive(item.status)) return Protocols.fill(strings.t(item.id + ".due"), time(item.idealMs))
+    if (item.ownStatus && item.status === "missed") return strings.t(item.id + ".ended")
     if (item.status === "upcoming") return strings.t("status.upcoming").arg(time(item.startMs))
     if (item.status === "due") return strings.t("status.due").arg(time(item.idealMs))
     if (item.status === "late") return strings.t("status.late").arg(time(item.endMs))
@@ -69,13 +75,14 @@ BarWidget {
     : sun && sun.kind !== "normal" ? strings.t("popup.noSun")
     : ""
 
+
   WidgetButton {
     id: button
     anchors.fill: parent
     bar: root.bar
     // A check for the rest of the day once everything is done; dimmed only
     // when the day ran out with something missed.
-    text: root.activeItem ? Protocols.GLYPHS[root.activeItem.anchor]
+    text: root.activeItem ? Protocols.GLYPHS[root.activeItem.glyph]
       : root.allDone ? Protocols.GLYPHS.allDone : Protocols.GLYPHS.idle
     active: root.activeItem !== null
     dimmed: root.activeItem === null && root.nextItem === null && !root.allDone
@@ -98,6 +105,65 @@ BarWidget {
     wrapMode: Text.WordWrap
   }
 
+  // One time in the settings: what it is, what it moves, and a button either
+  // side to shift it a step.
+  component SettingRow: Item {
+    id: setting
+    required property string which
+    width: parent.width
+    implicitHeight: Math.max(about.implicitHeight, later.implicitHeight)
+
+    Column {
+      id: about
+      anchors.left: parent.left
+      anchors.right: earlier.left
+      anchors.rightMargin: Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.space(2)
+
+      Label {
+        width: parent.width
+        text: strings.t("settings." + setting.which)
+        font.bold: true
+      }
+      Label {
+        width: parent.width
+        opacity: 0.7
+        font.pixelSize: Style.font.bodySmall
+        text: strings.t("settings." + setting.which + "Help")
+      }
+    }
+    PanelActionButton {
+      id: earlier
+      anchors.right: value.left
+      anchors.verticalCenter: parent.verticalCenter
+      iconText: Protocols.GLYPHS.earlier
+      foreground: Commons.Color.popups.text
+      hoverColor: Commons.Color.accent
+      tooltipText: strings.t("settings.earlier")
+      onClicked: root.service.shiftScheduleTime(setting.which, -Protocols.SCHEDULE_STEP)
+    }
+    Label {
+      id: value
+      anchors.right: later.left
+      anchors.verticalCenter: parent.verticalCenter
+      width: Style.space(76)
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.NoWrap
+      text: root.service ? root.time(Protocols.clockMs(root.service.nowMs, root.service.schedule[setting.which])) : ""
+    }
+    PanelActionButton {
+      id: later
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      iconText: Protocols.GLYPHS.later
+      foreground: Commons.Color.popups.text
+      hoverColor: Commons.Color.accent
+      tooltipText: strings.t("settings.later")
+      onClicked: root.service.shiftScheduleTime(setting.which, Protocols.SCHEDULE_STEP)
+    }
+  }
+
   PopupCard {
     id: popup
     anchorItem: root
@@ -105,22 +171,76 @@ BarWidget {
     owner: root
     open: root.popupOpen
     contentWidth: popup.fittedContentWidth(Style.space(340))
-    contentHeight: popup.fittedContentHeight(column.implicitHeight)
+    contentHeight: popup.fittedContentHeight(root.showSettings ? settings.implicitHeight : column.implicitHeight)
+
+    // Settings: the wake and bed times.
+    Column {
+      id: settings
+      width: parent.width
+      visible: root.showSettings
+      spacing: Style.space(12)
+
+      Item {
+        width: parent.width
+        implicitHeight: back.implicitHeight
+
+        PanelActionButton {
+          id: back
+          anchors.left: parent.left
+          iconText: Protocols.GLYPHS.back
+          foreground: Commons.Color.popups.text
+          hoverColor: Commons.Color.accent
+          tooltipText: strings.t("settings.back")
+          onClicked: root.showSettings = false
+        }
+        Label {
+          anchors.left: back.right
+          anchors.leftMargin: Style.space(6)
+          anchors.verticalCenter: back.verticalCenter
+          text: strings.t("settings.title")
+          font.pixelSize: Style.font.subtitle
+          font.bold: true
+        }
+      }
+
+      SettingRow { which: "wake" }
+      SettingRow { which: "bed" }
+    }
 
     Column {
       id: column
       width: parent.width
+      visible: !root.showSettings
       spacing: Style.space(12)
 
       Column {
         width: parent.width
         spacing: Style.space(2)
 
-        Label {
+        Item {
           width: parent.width
-          text: strings.t("title")
-          font.pixelSize: Style.font.subtitle
-          font.bold: true
+          implicitHeight: Math.max(title.implicitHeight, gear.implicitHeight)
+
+          Label {
+            id: title
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            text: strings.t("title")
+            font.pixelSize: Style.font.subtitle
+            font.bold: true
+          }
+          PanelActionButton {
+            id: gear
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.service !== null && root.service.stateLoaded
+            iconText: Protocols.GLYPHS.settings
+            foreground: Commons.Color.popups.text
+            hoverColor: Commons.Color.accent
+            opacity: 0.7
+            tooltipText: strings.t("settings.title")
+            onClicked: root.showSettings = true
+          }
         }
         Label {
           width: parent.width
@@ -151,7 +271,7 @@ BarWidget {
           Label {
             id: glyph
             anchors.left: parent.left
-            text: Protocols.GLYPHS[row.modelData.anchor]
+            text: Protocols.GLYPHS[row.modelData.glyph]
             font.pixelSize: Style.font.iconLarge
             color: row.current ? Commons.Color.urgent : Commons.Color.popups.text
             opacity: row.missed ? 0.5 : 1
@@ -194,7 +314,7 @@ BarWidget {
               visible: row.expanded
               opacity: 0.7
               font.pixelSize: Style.font.bodySmall
-              text: strings.t(row.modelData.id === "morning-hydration" ? "morning-hydration.window" : "window").arg(root.time(row.modelData.startMs)).arg(root.time(row.modelData.endMs))
+              text: strings.t(row.modelData.ownStatus ? "reminder.window" : "window").arg(root.time(row.modelData.startMs)).arg(root.time(row.modelData.endMs))
             }
             Label {
               width: parent.width
@@ -266,6 +386,7 @@ BarWidget {
           ? strings.t("sky." + root.dose.sky).arg(Commons.I18n.formatNumber(root.dose.minutes))
           : strings.t("sky.unknown")
       }
+
     }
   }
 }
